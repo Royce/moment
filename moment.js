@@ -30,7 +30,7 @@
         aspNetJsonRegex = /^\/?Date\((\-?\d+)/i,
 
         // format tokens
-        formattingTokens = /(\[[^\[]*\])|(\\)?(Mo|MM?M?M?|Do|DDDo|DD?D?D?|ddd?d?|do?|w[o|w]?|YYYY|YY|a|A|hh?|HH?|mm?|ss?|SS?S?|zz?|ZZ?|.)/g,
+        formattingTokens = /(\[[^\[]*\])|(\\)?(Mo|MM?M?M?|Do|DDDo|DD?D?D?|WW|ddd?d?|do?|w[o|w]?|YYYY|YY|a|A|hh?|HH?|mm?|ss?|SS?S?|zz?|ZZ?|.)/g,
         localFormattingTokens = /(\[[^\[]*\])|(\\)?(LT|LL?L?L?)/g,
 
         // parsing tokens
@@ -47,7 +47,8 @@
 
         // preliminary iso regex
         // 0000-00-00 + T + 00 or 00:00 or 00:00:00 or 00:00:00.000 + +00:00 or +0000
-        isoRegex = /^\s*\d{4}-\d\d-\d\d(T(\d\d(:\d\d(:\d\d(\.\d\d?\d?)?)?)?)?([\+\-]\d\d:?\d\d)?)?/,
+        // 0000-w00-0 ...
+        isoRegex = /^\s*\d{4}-(\d\d-\d\d|[Ww]\d\d-\d)(T(\d\d(:\d\d(:\d\d(\.\d\d?\d?)?)?)?)?([\+\-]\d\d:?\d\d)?)?/,
         isoFormat = 'YYYY-MM-DDTHH:mm:ssZ',
 
         // iso time formats and regexes
@@ -123,6 +124,10 @@
             },
             dddd : function (format) {
                 return getValueFromArray("weekdays", this.day(), this, format);
+            },
+            WW   : function () {
+                // Todo: Implement
+                return 22;
             },
             w    : function () {
                 var a = new Date(this.year(), this.month(), this.date() - this.day() + 5),
@@ -345,7 +350,7 @@
     // the array should mirror the parameters below
     // note: all values past the year are optional and will default to the lowest possible value.
     // [year, month, day , hour, minute, second, millisecond]
-    function dateFromArray(input, asUTC, hoursOffset, minutesOffset) {
+    function dateFromArray(input, asUTC, hoursOffset, minutesOffset, hasWeek, hasDay) {
         var i, date, forValid = [];
         for (i = 0; i < 7; i++) {
             forValid[i] = input[i] = (input[i] == null) ? (i === 2 ? 1 : 0) : input[i];
@@ -360,6 +365,10 @@
         // for checking isValid
         input[3] += hoursOffset || 0;
         input[4] += minutesOffset || 0;
+        // Todo: Note about Commercial format
+        if (hasWeek || hasDay) {
+            normalizeCommercialDate(input);
+        }
         date = new Date(0);
         if (asUTC) {
             date.setUTCFullYear(input[0], input[1], input[2]);
@@ -370,6 +379,38 @@
         }
         date._a = forValid;
         return date;
+    }
+
+    // convert an array to a date.
+    // the array should mirror the parameters below
+    // note: all values past the year are optional and will default to the lowest possible value.
+    // [year, month, day , hour, minute, second, millisecond]
+    function normalizeCommercialDate(input) {
+        var firstIsoWeekOfYear = function(year) {
+            var m = moment([year])
+                , day = m.day();
+
+            if ( day === 0 )
+            {
+                day = 7;
+            }
+
+            // ISO week is the first week with a Thursday, so if the first
+            // day of the year is Friday, move to next Sunday.
+            if ( day > 4 ) {
+                m.add('weeks', 1);
+            }
+
+            m.subtract('days', day - 1);
+
+            return m;
+        }
+        var firstMonday = firstIsoWeekOfYear(input[0]);
+        firstMonday.add({weeks: input[1], days: input[2]})
+
+        input[0] = firstMonday.year();
+        input[1] = firstMonday.month();
+        input[2] = firstMonday.date();
     }
 
     // Loads a language definition into the `languages` cache.  The function
@@ -504,6 +545,7 @@
             return parseTokenT;
         case 'MM':
         case 'DD':
+        case 'WW':
         case 'YY':
         case 'HH':
         case 'hh':
@@ -551,6 +593,18 @@
         case 'DD' : // fall through to DDDD
         case 'DDD' : // fall through to DDDD
         case 'DDDD' :
+            if (input != null) {
+                datePartArray[2] = ~~input;
+            }
+            break;
+        // WEEK
+        case 'WW' :
+            config.hasWeek = true;
+            datePartArray[1] = (input == null) ? 0 : ~~input - 1;
+            break;
+        // DAY OF WEEK
+        case 'd' :
+            config.hasDay = true;
             if (input != null) {
                 datePartArray[2] = ~~input;
             }
@@ -648,7 +702,7 @@
             datePartArray[3] = 0;
         }
         // return
-        return dateFromArray(datePartArray, config.isUTC, config.tzh, config.tzm);
+        return dateFromArray(datePartArray, config.isUTC, config.tzh, config.tzm, config.hasWeek, config.hasDay);
     }
 
     // date from string and array of format strings

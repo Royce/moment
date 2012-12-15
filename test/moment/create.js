@@ -165,6 +165,24 @@ exports.create = {
         test.done();
     },
 
+    "string with format (weekdate)" : function(test) {
+        moment.lang('en');
+        var a = [
+                ['YYYY-[w]WW-d',        '2012-w50-0'],
+                ['YYYY-[W]WW-d',        '2012-W01-3']
+            ],i;
+
+        test.expect(a.length);
+
+        test.equal(moment('2012-W50-3', 'YYYY-[w]WW-d').format("YYYY-MM-DD"), '2012-12-13', 'YYYY-[W]WW-d ---> 2012-12-13')
+
+        for (i = 0; i < a.length; i++) {
+            test.equal(moment(a[i][1], a[i][0]).format(a[i][0]), a[i][1], a[i][0] + ' ---> ' + a[i][1]);
+        }
+
+        test.done();
+    },
+
     "string with format (timezone)" : function(test) {
         test.expect(8);
         test.equal(moment('5 -0700', 'H ZZ').toDate().getUTCHours(), 12, 'parse hours "5 -0700" ---> "H ZZ"');
